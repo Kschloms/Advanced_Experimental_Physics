@@ -17,7 +17,7 @@
     {
         "name": "SLG",
         "chi_ag":36.6,
-        "Z":3
+        "Z":4
     },
     {
         "name": "TiO2",
@@ -27,7 +27,7 @@
     {
         "name": "Glass Tube",
         "chi_ag":52.2,
-        "Z":3
+        "Z":4
     },
     {
         "name": "Al Oxide Tube",

@@ -2,18 +2,37 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import os
+import json
+
+with open('new_chi_vals.json') as f:
+    chi_values = json.load(f)[0]
+
 
 class Material:
     def __init__(self, name, dir_name, tube_name, tube_directory, mass_density, diameter):
         self.name = name
         self.dir_name = dir_name
+        #Tube Stuff
         self.tube_name = tube_name
         self.tube_dir = tube_directory
-        self.data_was_set = False
+
+        self.tube_chi_P = chi_values[tube_name]['chi_P']
+        self.tube_Z = chi_values[tube_name]['Z']
+        self.tube_chi_g = self.calc_chi_g(self.tube_Z, self.tube_chi_P)
+
+        #Material Properties
         self.rho = mass_density
         self.r = diameter / 2 # radius (micro meters)
         self.set_data()
         self.Qs_calculated = False
+        if name != 'SLG':
+            self.chi_P = chi_values[name]['chi_P']
+            self.Z = chi_values[name]['Z']
+            self.chi_g = self.calc_chi_g(self.Z, self.chi_P)
+        else:
+            self.chi_g = 36.6
+
+        self.chi_agr = self.calc_chi_agr()
 
     @property
     def M(self):
@@ -32,7 +51,6 @@ class Material:
         self.num_runs = len(runs)
         self.times = [run['TIME'] for run in runs]
         self.CH1 = [run['CH1'] for run in runs]
-        self.data_was_set = True
 
     @property
     def Qs(self):
@@ -63,13 +81,19 @@ class Material:
         ax.set_title(f'Oscilloscope data of {self.name} in {self.tube_name}')
         ax.set_xlabel('Time (s)')
         ax.set_ylabel('Voltage (V)')
-        if self.data_was_set:
-            if specific_run is None:
-                for idx, (time_val, ch1_series) in enumerate(zip(self.times, self.CH1)):
-                    ax.plot(time_val, ch1_series, label=f'{self.tube_name} Run {idx+1}')
-            else:
-                ax.plot(self.times[specific_run], self.CH1[specific_run], label=f'{self.tube_name} Run {specific_run+1}')
-            ax.legend()
+        if specific_run is None:
+            for idx, (time_val, ch1_series) in enumerate(zip(self.times, self.CH1)):
+                ax.plot(time_val, ch1_series, label=f'{self.tube_name} Run {idx+1}')
+        else:
+            ax.plot(self.times[specific_run], self.CH1[specific_run], label=f'{self.tube_name} Run {specific_run+1}')
+        ax.legend()
+
+    def calc_chi_g(self, Z, chi_P):
+        chi_g = (1 + 2*Z) * (chi_P - 0.03) / 0.322
+        return round(chi_g,1)
+    
+    def calc_chi_agr(self):
+        return self.tube_chi_g - self.chi_g
 
 #measure_scooped_mass: mass of the material scooped in the measure cup (g)
 #num_measure_scoops: number of scoops of material in the measure cup (unitless)
@@ -86,3 +110,5 @@ def mass_calc(measure_scooped_mass, num_measure_scoops=3, h_measure=0.9, d_measu
     if get_rho:
         return M, rho
     return M #(g)
+
+
