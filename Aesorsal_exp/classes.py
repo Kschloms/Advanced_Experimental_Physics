@@ -37,8 +37,9 @@ class Material:
     @property
     def Qs(self):
         integration_results = []
+        R = 5*10**6 # in Ohms
         for idx, (time_val, ch1_series) in enumerate(zip(self.times, self.CH1)):
-            integral =  - np.trapezoid(ch1_series, time_val) / 5 / 10**6
+            integral =  - np.trapezoid(ch1_series, time_val) / R # in Coulombs
             integration_results.append(integral) # in Coulombs
         self.Qs_calculated = True
         self.Q_values = np.array(integration_results) 

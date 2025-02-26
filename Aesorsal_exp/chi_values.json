@@ -1,0 +1,37 @@
+[
+    {
+        "name": "Al2O3",
+        "chi_ag": 34.3,
+        "Z": 3
+    },
+    {
+        "name": "MgO",
+        "chi_ag":19.9,
+        "Z":2
+    },
+    {  
+        "name": "Nb2O5",
+        "chi_ag":53.6,
+        "Z":5
+    },
+    {
+        "name": "SLG",
+        "chi_ag":36.6,
+        "Z":3
+    },
+    {
+        "name": "TiO2",
+        "chi_ag":42.2,
+        "Z":3
+    },
+    {
+        "name": "Glass Tube",
+        "chi_ag":52.2,
+        "Z":3
+    },
+    {
+        "name": "Al Oxide Tube",
+        "chi_ag":34.3,
+        "Z":3
+    }
+]
