@@ -10,6 +10,8 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap, QImage
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.pyplot as plt
+import scienceplots
+plt.style.use(['science', 'no-latex'])
 
 def import_images(image_folder):
     image_files = [
@@ -95,12 +97,13 @@ class MotGrowthGUI(QWidget):
             "3Γ": "96.80 MHz",
             "4Γ": "93.77 MHz"
         }
+        self.pixel_size = 4.8e-6  # Pixel size in meters (4.8 microns)
         self.init_ui()
 
     def init_ui(self):
         layout = QVBoxLayout(self)
 
-        # Cooling power and detuning input
+        # Cooling power, detuning, and pixel size input
         cp_layout = QHBoxLayout()
         cp_layout.addWidget(QLabel("Cooling Power (%):"))
         self.cp_input = QLineEdit(str(self.cooling_power))
@@ -114,6 +117,12 @@ class MotGrowthGUI(QWidget):
             self.detuning_combo.addItem(key)
         self.detuning_combo.currentIndexChanged.connect(self.update_detuning_combo)
         cp_layout.addWidget(self.detuning_combo)
+
+        cp_layout.addWidget(QLabel("Pixel Size (m):"))
+        self.pixel_size_input = QLineEdit(str(self.pixel_size))
+        self.pixel_size_input.setFixedWidth(80)
+        self.pixel_size_input.editingFinished.connect(self.update_pixel_size)
+        cp_layout.addWidget(self.pixel_size_input)
 
         cp_layout.addStretch()
         layout.addLayout(cp_layout)
@@ -192,6 +201,14 @@ class MotGrowthGUI(QWidget):
         self.plot_layout.addWidget(save_btn)
         self.tabs.addTab(self.plot_tab, "MOT Size vs Time")
 
+        # Tab 3: Intensity
+        self.intensity_tab = QWidget()
+        self.intensity_layout = QVBoxLayout(self.intensity_tab)
+        self.intensity_figure, self.intensity_ax = plt.subplots()
+        self.intensity_canvas = FigureCanvas(self.intensity_figure)
+        self.intensity_layout.addWidget(self.intensity_canvas)
+        self.tabs.addTab(self.intensity_tab, "MOT Intensity vs Time")
+
         layout.addWidget(self.tabs)
         self.setLayout(layout)
 
@@ -249,12 +266,37 @@ class MotGrowthGUI(QWidget):
             return
         self.update_plot_tab()
 
+    def update_pixel_size(self):
+        try:
+            self.pixel_size = float(self.pixel_size_input.text())
+        except ValueError:
+            self.pixel_size = 4.8e-6  # fallback
+            self.pixel_size_input.setText(str(self.pixel_size))
+        self.update_plot_tab()
+
+    def calculate_mot_intensity(self): #Average greyscale brightness of MOT within contours
+        intensities = []
+        for img, contour in zip(self.images, self.contours_list):
+            if contour is not None:
+                mask = np.zeros(img.shape[:2], dtype=np.uint8)
+                cv.drawContours(mask, [contour], -1, 255, -1)
+                gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+                mot_pixels = gray[mask == 255]
+                if mot_pixels.size > 0:
+                    intensities.append(np.mean(mot_pixels))
+                else:
+                    intensities.append(0)
+            else:
+                intensities.append(0)
+        return intensities
+
     def update_analysis(self):
         self.mot_sizes, self.contours_list = calculate_mot_size(
             self.images, self.contour_threshold, self.area_threshold
         )
         self.update_images_tab()
         self.update_plot_tab()
+        self.update_intensity_tab()  
 
     def update_images_tab(self):
         # Remove old widgets
@@ -276,16 +318,28 @@ class MotGrowthGUI(QWidget):
 
     def update_plot_tab(self):
         self.ax.clear()
-        self.ax.plot(self.time_points[:len(self.mot_sizes)], self.mot_sizes, marker='o')
+        # Convert mot_sizes (pixels) to mm^2
+        mot_sizes_real = [area * (self.pixel_size ** 2) * 1e6 for area in self.mot_sizes]  # mm^2
+        self.ax.plot(self.time_points[:len(mot_sizes_real)], mot_sizes_real, marker='o')
         self.ax.set_xlabel('Time (s)')
-        self.ax.set_ylabel('MOT Area (pixels)')
+        self.ax.set_ylabel('MOT Area (mm$^2$)')
         # Title logic with LaTeX
         title = f'MOT Growth, Cooling Power: {self.cooling_power:.0f}%'
         if self.detuning_latex:
-            title += f', Detuning: {self.detuning_latex}, AOM Frequncy: {self.detuning_mhz}'
+            title += f', Detuning: {self.detuning_latex}, AOM Frequency: {self.detuning_mhz}'
         self.ax.set_title(title)
         self.ax.grid(True)
         self.canvas.draw()
+
+    def update_intensity_tab(self):
+        intensities = self.calculate_mot_intensity()
+        self.intensity_ax.clear()
+        self.intensity_ax.plot(self.time_points[:len(intensities)], intensities, marker='o')
+        self.intensity_ax.set_xlabel('Time (s)')
+        self.intensity_ax.set_ylabel('Mean MOT Intensity')
+        self.intensity_ax.set_title('MOT Intensity vs Time')
+        self.intensity_ax.grid(True)
+        self.intensity_canvas.draw()
 
     def save_plot(self):
         file_dialog = QFileDialog(self)
