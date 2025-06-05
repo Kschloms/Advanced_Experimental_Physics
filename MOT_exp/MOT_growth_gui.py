@@ -199,6 +199,10 @@ class MotGrowthGUI(QWidget):
         save_btn = QPushButton("Save Plot")
         save_btn.clicked.connect(self.save_plot)
         self.plot_layout.addWidget(save_btn)
+        # Export data button
+        export_btn = QPushButton("Export Data")
+        export_btn.clicked.connect(self.export_data)
+        self.plot_layout.addWidget(export_btn)
         self.tabs.addTab(self.plot_tab, "MOT Size vs Time")
 
         # Tab 3: Intensity
@@ -208,6 +212,11 @@ class MotGrowthGUI(QWidget):
         self.intensity_canvas = FigureCanvas(self.intensity_figure)
         self.intensity_layout.addWidget(self.intensity_canvas)
         self.tabs.addTab(self.intensity_tab, "MOT Intensity vs Time")
+
+        # Save plot button for intensity
+        self.intensity_save_btn = QPushButton("Save Plot")
+        self.intensity_save_btn.clicked.connect(self.save_intensity_plot)
+        self.intensity_layout.addWidget(self.intensity_save_btn)
 
         layout.addWidget(self.tabs)
         self.setLayout(layout)
@@ -346,6 +355,22 @@ class MotGrowthGUI(QWidget):
         file_path, _ = file_dialog.getSaveFileName(self, "Save Plot", "", "PNG Files (*.png);;PDF Files (*.pdf);;All Files (*)")
         if file_path:
             self.figure.savefig(file_path)
+
+    def export_data(self):
+        file_dialog = QFileDialog(self)
+        file_path, _ = file_dialog.getSaveFileName(
+            self, "Export Data", "", "NumPy Archive (*.npz);;All Files (*)"
+        )
+        if file_path:
+            mot_sizes_pixels = np.array(self.mot_sizes)
+            time_points = np.array(self.time_points[:len(mot_sizes_pixels)])
+            np.savez(file_path, time=time_points, mot_area_pixels=mot_sizes_pixels)
+
+    def save_intensity_plot(self):
+        file_dialog = QFileDialog(self)
+        file_path, _ = file_dialog.getSaveFileName(self, "Save Intensity Plot", "", "PNG Files (*.png);;PDF Files (*.pdf);;All Files (*)")
+        if file_path:
+            self.intensity_figure.savefig(file_path)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
