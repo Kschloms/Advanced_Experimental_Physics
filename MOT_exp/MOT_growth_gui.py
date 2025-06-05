@@ -4,7 +4,7 @@ import numpy as np
 import cv2 as cv
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider, QTabWidget,
-    QPushButton, QLineEdit, QFileDialog, QMessageBox, QScrollArea, QGridLayout
+    QPushButton, QLineEdit, QFileDialog, QMessageBox, QScrollArea, QGridLayout, QComboBox
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap, QImage
@@ -77,7 +77,24 @@ class MotGrowthGUI(QWidget):
         self.time_step = 0.2
         self.time_points = np.arange(self.time_start, self.time_end, self.time_step)
         self.cooling_power = 20  # Default value
-        self.detuning = ""       # Default: empty string
+        self.detuning_latex = ""  # For LaTeX display in title
+        self.detuning_mhz = ""    # For MHz value if needed
+        self.detuning_dict = {
+            "": "",           # For "no detuning" option
+            "0Γ": r"$0\Gamma$",
+            "1Γ": r"$1\Gamma$",
+            "2Γ": r"$2\Gamma$",
+            "3Γ": r"$3\Gamma$",
+            "4Γ": r"$4\Gamma$"
+        }
+        self.detuning_mhz_dict = {
+            "": "",
+            "0Γ": "105.9 MHz",
+            "1Γ": "102.9 MHz",
+            "2Γ": "99.84 MHz",
+            "3Γ": "96.80 MHz",
+            "4Γ": "93.77 MHz"
+        }
         self.init_ui()
 
     def init_ui(self):
@@ -91,11 +108,12 @@ class MotGrowthGUI(QWidget):
         self.cp_input.editingFinished.connect(self.update_cooling_power)
         cp_layout.addWidget(self.cp_input)
 
-        cp_layout.addWidget(QLabel("Detuning (MHz):"))
-        self.detuning_input = QLineEdit("")
-        self.detuning_input.setFixedWidth(80)
-        self.detuning_input.editingFinished.connect(self.update_detuning)
-        cp_layout.addWidget(self.detuning_input)
+        cp_layout.addWidget(QLabel("Detuning:"))
+        self.detuning_combo = QComboBox()
+        for key in self.detuning_dict:
+            self.detuning_combo.addItem(key)
+        self.detuning_combo.currentIndexChanged.connect(self.update_detuning_combo)
+        cp_layout.addWidget(self.detuning_combo)
 
         cp_layout.addStretch()
         layout.addLayout(cp_layout)
@@ -185,8 +203,10 @@ class MotGrowthGUI(QWidget):
             self.cp_input.setText(str(self.cooling_power))
         self.update_plot_tab()
 
-    def update_detuning(self):
-        self.detuning = self.detuning_input.text().strip()
+    def update_detuning_combo(self):
+        key = self.detuning_combo.currentText()
+        self.detuning_latex = self.detuning_dict.get(key, "")
+        self.detuning_mhz = self.detuning_mhz_dict.get(key, "")
         self.update_plot_tab()
 
     def browse_folder(self):
@@ -259,10 +279,10 @@ class MotGrowthGUI(QWidget):
         self.ax.plot(self.time_points[:len(self.mot_sizes)], self.mot_sizes, marker='o')
         self.ax.set_xlabel('Time (s)')
         self.ax.set_ylabel('MOT Area (pixels)')
-        # Title logic
+        # Title logic with LaTeX
         title = f'MOT Growth, Cooling Power: {self.cooling_power:.0f}%'
-        if self.detuning:
-            title += f', Detuning: {self.detuning} MHz'
+        if self.detuning_latex:
+            title += f', Detuning: {self.detuning_latex}, AOM Frequncy: {self.detuning_mhz}'
         self.ax.set_title(title)
         self.ax.grid(True)
         self.canvas.draw()
