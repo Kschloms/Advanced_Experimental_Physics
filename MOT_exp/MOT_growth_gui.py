@@ -189,23 +189,35 @@ class MotGrowthGUI(QWidget):
         self.images_layout.addWidget(self.scroll_area)
         self.tabs.addTab(self.images_tab, "Images + Contour")
 
-        # Tab 2: Plot
-        self.plot_tab = QWidget()
-        self.plot_layout = QVBoxLayout(self.plot_tab)
-        self.figure, self.ax = plt.subplots()
-        self.canvas = FigureCanvas(self.figure)
-        self.plot_layout.addWidget(self.canvas)
-        # Save plot button
-        save_btn = QPushButton("Save Plot")
-        save_btn.clicked.connect(self.save_plot)
-        self.plot_layout.addWidget(save_btn)
-        # Export data button
-        export_btn = QPushButton("Export Data")
-        export_btn.clicked.connect(self.export_data)
-        self.plot_layout.addWidget(export_btn)
-        self.tabs.addTab(self.plot_tab, "MOT Size vs Time")
+        # Tab 2: MOT Size (pixels)
+        self.plot_tab_pixels = QWidget()
+        self.plot_layout_pixels = QVBoxLayout(self.plot_tab_pixels)
+        self.figure_pixels, self.ax_pixels = plt.subplots()
+        self.canvas_pixels = FigureCanvas(self.figure_pixels)
+        self.plot_layout_pixels.addWidget(self.canvas_pixels)
+        save_btn_pixels = QPushButton("Save Plot")
+        save_btn_pixels.clicked.connect(self.save_plot_pixels)
+        self.plot_layout_pixels.addWidget(save_btn_pixels)
+        export_btn_pixels = QPushButton("Export Data")
+        export_btn_pixels.clicked.connect(self.export_data)
+        self.plot_layout_pixels.addWidget(export_btn_pixels)
+        self.tabs.addTab(self.plot_tab_pixels, "MOT Size (pixels)")
 
-        # Tab 3: Intensity
+        # Tab 3: MOT Size (mm²)
+        self.plot_tab_mm2 = QWidget()
+        self.plot_layout_mm2 = QVBoxLayout(self.plot_tab_mm2)
+        self.figure_mm2, self.ax_mm2 = plt.subplots()
+        self.canvas_mm2 = FigureCanvas(self.figure_mm2)
+        self.plot_layout_mm2.addWidget(self.canvas_mm2)
+        save_btn_mm2 = QPushButton("Save Plot")
+        save_btn_mm2.clicked.connect(self.save_plot_mm2)
+        self.plot_layout_mm2.addWidget(save_btn_mm2)
+        export_btn_mm2 = QPushButton("Export Data")
+        export_btn_mm2.clicked.connect(self.export_data)
+        self.plot_layout_mm2.addWidget(export_btn_mm2)
+        self.tabs.addTab(self.plot_tab_mm2, "MOT Size (mm²)")
+
+        # Tab 4: Intensity
         self.intensity_tab = QWidget()
         self.intensity_layout = QVBoxLayout(self.intensity_tab)
         self.intensity_figure, self.intensity_ax = plt.subplots()
@@ -304,7 +316,8 @@ class MotGrowthGUI(QWidget):
             self.images, self.contour_threshold, self.area_threshold
         )
         self.update_images_tab()
-        self.update_plot_tab()
+        self.update_plot_tab_pixels()
+        self.update_plot_tab_mm2()
         self.update_intensity_tab()  
 
     def update_images_tab(self):
@@ -340,6 +353,32 @@ class MotGrowthGUI(QWidget):
         self.ax.grid(True)
         self.canvas.draw()
 
+    def update_plot_tab_pixels(self):
+        self.ax_pixels.clear()
+        mot_sizes_pixels = self.mot_sizes
+        self.ax_pixels.plot(self.time_points[:len(mot_sizes_pixels)], mot_sizes_pixels, marker='o')
+        self.ax_pixels.set_xlabel('Time (s)')
+        self.ax_pixels.set_ylabel('MOT Area (pixels)')
+        title = f'MOT Growth, Cooling Power: {self.cooling_power:.0f}%'
+        if self.detuning_latex:
+            title += f', Detuning: {self.detuning_latex}, AOM Frequency: {self.detuning_mhz}'
+        self.ax_pixels.set_title(title)
+        self.ax_pixels.grid(True)
+        self.canvas_pixels.draw()
+
+    def update_plot_tab_mm2(self):
+        self.ax_mm2.clear()
+        mot_sizes_mm2 = [area * (self.pixel_size ** 2) * 1e6 for area in self.mot_sizes]  # mm^2
+        self.ax_mm2.plot(self.time_points[:len(mot_sizes_mm2)], mot_sizes_mm2, marker='o')
+        self.ax_mm2.set_xlabel('Time (s)')
+        self.ax_mm2.set_ylabel('MOT Area (mm$^2$)')
+        title = f'MOT Growth, Cooling Power: {self.cooling_power:.0f}%'
+        if self.detuning_latex:
+            title += f', Detuning: {self.detuning_latex}, AOM Frequency: {self.detuning_mhz}'
+        self.ax_mm2.set_title(title)
+        self.ax_mm2.grid(True)
+        self.canvas_mm2.draw()
+
     def update_intensity_tab(self):
         intensities = self.calculate_mot_intensity()
         self.intensity_ax.clear()
@@ -355,6 +394,18 @@ class MotGrowthGUI(QWidget):
         file_path, _ = file_dialog.getSaveFileName(self, "Save Plot", "", "PNG Files (*.png);;PDF Files (*.pdf);;All Files (*)")
         if file_path:
             self.figure.savefig(file_path)
+
+    def save_plot_pixels(self):
+        file_dialog = QFileDialog(self)
+        file_path, _ = file_dialog.getSaveFileName(self, "Save Plot (pixels)", "", "PNG Files (*.png);;PDF Files (*.pdf);;All Files (*)")
+        if file_path:
+            self.figure_pixels.savefig(file_path)
+
+    def save_plot_mm2(self):
+        file_dialog = QFileDialog(self)
+        file_path, _ = file_dialog.getSaveFileName(self, "Save Plot (mm²)", "", "PNG Files (*.png);;PDF Files (*.pdf);;All Files (*)")
+        if file_path:
+            self.figure_mm2.savefig(file_path)
 
     def export_data(self):
         file_dialog = QFileDialog(self)
