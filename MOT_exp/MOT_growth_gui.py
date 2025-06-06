@@ -14,11 +14,19 @@ import scienceplots
 plt.style.use(['science', 'no-latex'])
 
 def import_images(image_folder):
+    def extract_number(filename):
+        # Extract the last integer before the extension
+        import re
+        match = re.search(r'(\d+)(?=\.\w+$)', filename)
+        return int(match.group(1)) if match else -1
+
     image_files = [
         os.path.join(image_folder, f)
-        for f in sorted(os.listdir(image_folder))
+        for f in os.listdir(image_folder)
         if f.lower().endswith(('.tif', '.tiff'))
     ]
+    # Sort by extracted number
+    image_files.sort(key=lambda f: extract_number(os.path.basename(f)))
     images = []
     for file in image_files:
         img = cv.imread(file)
@@ -233,19 +241,26 @@ class MotGrowthGUI(QWidget):
         layout.addWidget(self.tabs)
         self.setLayout(layout)
 
+        # Multi-folder button
+        multi_btn = QPushButton("Open Multi-Folder Growth Window")
+        multi_btn.clicked.connect(self.open_multi_folder_window)
+        layout.addWidget(multi_btn)
+
     def update_cooling_power(self):
         try:
             self.cooling_power = float(self.cp_input.text())
         except ValueError:
             self.cooling_power = 20  # fallback
             self.cp_input.setText(str(self.cooling_power))
-        self.update_plot_tab()
+        self.update_plot_tab_pixels()
+        self.update_plot_tab_mm2()
 
     def update_detuning_combo(self):
         key = self.detuning_combo.currentText()
         self.detuning_latex = self.detuning_dict.get(key, "")
         self.detuning_mhz = self.detuning_mhz_dict.get(key, "")
-        self.update_plot_tab()
+        self.update_plot_tab_pixels()
+        self.update_plot_tab_mm2()
 
     def browse_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Image Folder")
@@ -285,7 +300,8 @@ class MotGrowthGUI(QWidget):
             self.time_end_input.setText(str(self.time_end))
             self.time_step_input.setText(str(self.time_step))
             return
-        self.update_plot_tab()
+        self.update_plot_tab_pixels()
+        self.update_plot_tab_mm2()
 
     def update_pixel_size(self):
         try:
@@ -293,7 +309,7 @@ class MotGrowthGUI(QWidget):
         except ValueError:
             self.pixel_size = 4.8e-6  # fallback
             self.pixel_size_input.setText(str(self.pixel_size))
-        self.update_plot_tab()
+        self.update_plot_tab_mm2()
 
     def calculate_mot_intensity(self): #Average greyscale brightness of MOT within contours
         intensities = []
@@ -338,20 +354,20 @@ class MotGrowthGUI(QWidget):
             label.setPixmap(pixmap.scaled(200, 200, Qt.AspectRatioMode.KeepAspectRatio))
             self.grid_layout.addWidget(label, idx // cols, idx % cols)
 
-    def update_plot_tab(self):
-        self.ax.clear()
-        # Convert mot_sizes (pixels) to mm^2
-        mot_sizes_real = [area * (self.pixel_size ** 2) * 1e6 for area in self.mot_sizes]  # mm^2
-        self.ax.plot(self.time_points[:len(mot_sizes_real)], mot_sizes_real, marker='o')
-        self.ax.set_xlabel('Time (s)')
-        self.ax.set_ylabel('MOT Area (mm$^2$)')
-        # Title logic with LaTeX
-        title = f'MOT Growth, Cooling Power: {self.cooling_power:.0f}%'
-        if self.detuning_latex:
-            title += f', Detuning: {self.detuning_latex}, AOM Frequency: {self.detuning_mhz}'
-        self.ax.set_title(title)
-        self.ax.grid(True)
-        self.canvas.draw()
+    # def update_plot_tab(self):
+    #     self.ax.clear()
+    #     # Convert mot_sizes (pixels) to mm^2
+    #     mot_sizes_real = [area * (self.pixel_size ** 2) * 1e6 for area in self.mot_sizes]  # mm^2
+    #     self.ax.plot(self.time_points[:len(mot_sizes_real)], mot_sizes_real, marker='o')
+    #     self.ax.set_xlabel('Time (s)')
+    #     self.ax.set_ylabel('MOT Area (mm$^2$)')
+    #     # Title logic with LaTeX
+    #     title = f'MOT Growth, Cooling Power: {self.cooling_power:.0f}%'
+    #     if self.detuning_latex:
+    #         title += f', Detuning: {self.detuning_latex}, AOM Frequency: {self.detuning_mhz}'
+    #     self.ax.set_title(title)
+    #     self.ax.grid(True)
+    #     self.canvas.draw()
 
     def update_plot_tab_pixels(self):
         self.ax_pixels.clear()
@@ -408,20 +424,139 @@ class MotGrowthGUI(QWidget):
             self.figure_mm2.savefig(file_path)
 
     def export_data(self):
+        current_tab = self.tabs.currentWidget()
+        # Check if we're in the pixels or mm² tab
+        if current_tab == self.plot_tab_pixels:
+            # Export pixels
+            mot_sizes = np.array(self.mot_sizes)
+            ylabel = "mot_area_pixels"
+        elif current_tab == self.plot_tab_mm2:
+            # Export mm²
+            mot_sizes = np.array([area * (self.pixel_size ** 2) * 1e6 for area in self.mot_sizes])
+            ylabel = "mot_area_mm2"
+        else:
+            # Default to pixels if not in either tab
+            mot_sizes = np.array(self.mot_sizes)
+            ylabel = "mot_area_pixels"
+
+        time_points = np.array(self.time_points[:len(mot_sizes)])
         file_dialog = QFileDialog(self)
         file_path, _ = file_dialog.getSaveFileName(
             self, "Export Data", "", "NumPy Archive (*.npz);;All Files (*)"
         )
         if file_path:
-            mot_sizes_pixels = np.array(self.mot_sizes)
-            time_points = np.array(self.time_points[:len(mot_sizes_pixels)])
-            np.savez(file_path, time=time_points, mot_area_pixels=mot_sizes_pixels)
+            np.savez(file_path, time=time_points, **{ylabel: mot_sizes}, aom_freq=self.detuning_mhz, cooling_power=self.cooling_power)
 
     def save_intensity_plot(self):
         file_dialog = QFileDialog(self)
         file_path, _ = file_dialog.getSaveFileName(self, "Save Intensity Plot", "", "PNG Files (*.png);;PDF Files (*.pdf);;All Files (*)")
         if file_path:
             self.intensity_figure.savefig(file_path)
+
+    def open_multi_folder_window(self):
+        self.multi_window = MultiFolderGrowthWindow(self.time_points, self.area_threshold)
+        self.multi_window.show()
+
+class MultiFolderGrowthWindow(QWidget):
+    def __init__(self, time_points, area_threshold):
+        super().__init__()
+        self.setWindowTitle("Multi-Folder MOT Growth Comparison")
+        self.time_points = time_points
+        self.area_threshold = area_threshold
+        self.folders = []  # List of dicts: {'path':..., 'threshold':..., 'mot_sizes':..., 'color':...'}
+        self.folder_widgets = []
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+
+        # Folder controls
+        self.folder_controls = QVBoxLayout()
+        add_folder_btn = QPushButton("Add Folder")
+        add_folder_btn.clicked.connect(self.add_folder)
+        self.folder_controls.addWidget(add_folder_btn)
+        layout.addLayout(self.folder_controls)
+
+        # Plot
+        self.figure, self.ax = plt.subplots()
+        self.canvas = FigureCanvas(self.figure)
+        layout.addWidget(self.canvas)
+
+        self.setLayout(layout)
+
+    def add_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, "Select Image Folder")
+        if not folder:
+            return
+        threshold = 30
+        color = plt.cm.tab10(len(self.folders) % 10)
+        folder_dict = {'path': folder, 'threshold': threshold, 'mot_sizes': [], 'color': color}
+        self.folders.append(folder_dict)
+
+        # UI for this folder
+        hbox = QHBoxLayout()
+        label = QLabel(os.path.basename(folder))
+        hbox.addWidget(label)
+        threshold_slider = QSlider(Qt.Orientation.Horizontal)
+        threshold_slider.setMinimum(0)
+        threshold_slider.setMaximum(255)
+        threshold_slider.setValue(threshold)
+        threshold_slider.setFixedWidth(120)
+        hbox.addWidget(QLabel("Contour Threshold:"))
+        hbox.addWidget(threshold_slider)
+        remove_btn = QPushButton("Remove")
+        hbox.addWidget(remove_btn)
+        self.folder_controls.addLayout(hbox)
+        self.folder_widgets.append((hbox, threshold_slider, remove_btn))
+
+        idx = len(self.folders) - 1
+        threshold_slider.valueChanged.connect(lambda val, i=idx: self.update_threshold(i, val))
+        remove_btn.clicked.connect(lambda _, i=idx: self.remove_folder(i))
+
+        self.calculate_folder(idx)
+        self.update_plot()
+
+    def update_threshold(self, idx, val):
+        self.folders[idx]['threshold'] = val
+        self.calculate_folder(idx)
+        self.update_plot()
+
+    def remove_folder(self, idx):
+        self.folders.pop(idx)
+        layout, slider, btn = self.folder_widgets.pop(idx)
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.setParent(None)
+        # Reconnect sliders and buttons
+        for i, (layout, slider, btn) in enumerate(self.folder_widgets):
+            slider.valueChanged.disconnect()
+            slider.valueChanged.connect(lambda val, i=i: self.update_threshold(i, val))
+            btn.clicked.disconnect()
+            btn.clicked.connect(lambda _, i=i: self.remove_folder(i))
+        self.update_plot()
+
+    def calculate_folder(self, idx):
+        folder = self.folders[idx]['path']
+        threshold = self.folders[idx]['threshold']
+        images = import_images(folder)
+        mot_sizes, _ = calculate_mot_size(images, threshold, self.area_threshold)
+        self.folders[idx]['mot_sizes'] = mot_sizes
+
+    def update_plot(self):
+        self.ax.clear()
+        for folder in self.folders:
+            mot_sizes = folder['mot_sizes']
+            label = os.path.basename(folder['path'])
+            color = folder['color']
+            self.ax.plot(self.time_points[:len(mot_sizes)], mot_sizes, marker='o', label=label, color=color)
+        self.ax.set_xlabel('Time (s)')
+        self.ax.set_ylabel('MOT Area (pixels)')
+        self.ax.set_title('MOT Growth: Multiple Folders')
+        self.ax.legend()
+        self.ax.grid(True)
+        self.canvas.draw()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
