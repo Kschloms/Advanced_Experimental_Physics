@@ -246,6 +246,11 @@ class MotGrowthGUI(QWidget):
         multi_btn.clicked.connect(self.open_multi_folder_window)
         layout.addWidget(multi_btn)
 
+        # Export images + contours button
+        export_img_btn = QPushButton("Export Images + Contours")
+        export_img_btn.clicked.connect(self.export_images_and_contours)
+        self.images_layout.addWidget(export_img_btn)
+
     def update_cooling_power(self):
         try:
             self.cooling_power = float(self.cp_input.text())
@@ -456,6 +461,29 @@ class MotGrowthGUI(QWidget):
     def open_multi_folder_window(self):
         self.multi_window = MultiFolderGrowthWindow(self.time_points, self.area_threshold)
         self.multi_window.show()
+
+    def export_images_and_contours(self):
+        if not self.images:
+            QMessageBox.warning(self, "Error", "No images loaded.")
+            return
+
+        folder = QFileDialog.getExistingDirectory(self, "Select Export Folder")
+        if not folder:
+            return
+
+        for idx, (img, contour) in enumerate(zip(self.images, self.contours_list)):
+            # Save image with contour as PNG
+            img_disp = img.copy()
+            if contour is not None:
+                cv.drawContours(img_disp, [contour], -1, (0, 255, 0), 2)
+            img_filename = os.path.join(folder, f"mot_image_{idx:03d}.png")
+            cv.imwrite(img_filename, img_disp)
+
+            # Save contour as .npy (even if None, for consistency)
+            contour_filename = os.path.join(folder, f"mot_contour_{idx:03d}.npy")
+            np.save(contour_filename, contour if contour is not None else np.array([]))
+        
+        QMessageBox.information(self, "Export Complete", f"Exported {len(self.images)} images and contours to:\n{folder}")
 
 class MultiFolderGrowthWindow(QWidget):
     def __init__(self, time_points, area_threshold):
